@@ -8,4 +8,4 @@ This is a single-file python module; drop it somewhere in your module paths.
 
 ## usage
 
-In ordinary usage you simply import the module. To turn off the console coloring, use `conemu.unset_terminal()`
+In ordinary usage you simply import the module. To turn off the console coloring, use `conemu.unset_terminal()`.  Its unlikely you'll ever want to import this module in any other circumstance than running a python session inside ConEmu.
