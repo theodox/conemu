@@ -1,9 +1,9 @@
 __author__ = 'Stephen Theodore'
 from collections import namedtuple
-import  pprint
+import pprint
 import sys
 import re
-
+import traceback
 
 # constants
 ESC = '\033'
@@ -23,10 +23,13 @@ CLEAR = code(23)
 CLEAR_SCREEN = ESC + "[2J"
 
 _span = namedtuple('span', 'start end')
+
+
 class Span(_span):
     '''
     Callable class that spits out start-<string>-end sequence. Create span objects and call them to produce tagged spans.
     '''
+
     def __call__(self, val):
         return "{}{}{}".format(self.start, val, self.end)
 
@@ -37,25 +40,38 @@ class Terminal(object):
     
     There is no need to instantiate this: its just a collection of functions under a name.
     '''
-    color = tuple((Span(multicode(38, 5, c), NOCOLOR)) for c in range(15))
-    bg = tuple((Span(multicode(48, 5, c), NOBG)) for c in range(15))
+    color = tuple((Span(multicode(38, 5, c), NOCOLOR)) for c in range(16))
+    bg = tuple((Span(multicode(48, 5, c), NOBG)) for c in range(7))
     reverse = Span(INVERSE, RESET)
     bold = Span(BOLD, RESET)
     reset = RESET
 
     @classmethod
-    def set_prompt(cls, prompt, prompt2 = ".", color = color[2]):
+    def set_prompt(cls, prompt, prompt2=".", color=color[8]):
+        """
+        Set the system prompt, and set the continuation prompt to the same width.  If color
+        is supplied, color the system prompt with it.
+        """
         sys.ps1 = color(prompt)
-        sys.ps2 = color((prompt2 * (len(prompt) -1))  + " ")
+        sys.ps2 = color((prompt2 * (len(prompt) - 1)) + " ")
 
     @classmethod
     def unset_prompt(cls):
+        """
+        Revert to standard python prompts
+        """
         sys.ps1 = ">>> "
         sys.ps2 = "... "
 
     @classmethod
     def clear(cls):
+        """
+        Clear the terminal screen
+
+        @note : I'm not sure it this works on ANSI terminals other than ConEmu.
+        """
         sys.__stdout__.write(CLEAR_SCREEN)
+
 
 class ConEmu(object):
     '''
@@ -85,34 +101,53 @@ class ConEmu(object):
 
 
 class ErrorWriter(object):
+    """
+    Format sys.stderr for use with Maya
+    """
 
-    def __init__(self, color = Terminal.color[9], bg = Terminal.bg[1]):
+    TEXT = Terminal.color[8]
+    BG = Terminal.bg[1]
+
+
+    def __init__(self, color=TEXT, bg=BG):
         self.color = color
         self.bg = bg
 
     def write(self, arg):
-        sys.__stdout__.write(self.color(self.bg(arg)))
+        sys.__stdout__.write("." + self.color(self.bg(arg)))
 
     def writelines(self, *arg):
         sys.__stdout__.writelines(self.color(self.bg("\n".join(arg))))
+
+    def excepthook(self, tb_type, exc_object, tb, detail=2):
+        result = traceback.format_exception(tb_type, exc_object, tb, detail)
+        header = '_' * 80
+        padded = lambda p: p[:-1].ljust(80)
+        # ignore the 'traceback' line
+        if result[0].startswith('Traceback'):
+            result = result[1:]
+        result = [header] + result
+        final = map(padded, result)
+        self.writelines('\n'.join(final) + "\n")
+
 
 class MayaWriter(object):
     """
     Formats sys.stdout for use with Maya
     """
 
-    GENERIC = Terminal.color[7]   # for generic printouts
-    COMMENT = Terminal.color[6]   # for code comments
-    CODE = Terminal.color[14]     # for code objects
+    GENERIC = Terminal.color[15]  # for generic printouts
+    COMMENT = Terminal.color[14]  # for code comments
+    CODE = Terminal.color[3]      # for code objects
     MAYA = Terminal.color[11]     # for maya objects
     BG = Terminal.bg[0]           # background (none by default)
 
 
-    def __init__(self, color = GENERIC,
-                 bg =BG,
-                 comment_color = COMMENT,
-                 maya_color = MAYA,
-                 code_color = CODE):
+    def __init__(self, color=GENERIC,
+                 bg=BG,
+                 comment_color=COMMENT,
+                 maya_color=MAYA,
+                 code_color=CODE):
         self.color = color
         self.code_color = Span(code_color.start, self.color.start)
         self.comment_color = Span(comment_color.start, self.color.start)
@@ -126,7 +161,7 @@ class MayaWriter(object):
         """
         color Unicode strings with self.maya_color, useful for picking out object namnes
         """
-        return self.maya_color(val.group())
+        return self.maya_color(val.group()[1:])
 
     def replace_comment(self, val):
         """
@@ -140,7 +175,8 @@ class MayaWriter(object):
         """
         return self.code_color(val.group())
 
-    def write (self, arg):
+
+    def write(self, arg):
         arg = re.sub(self.unicode, self.replace_unicode, arg)
         arg = re.sub(self.comment, self.replace_comment, arg)
         arg = re.sub(self.repr_code, self.replace_repr, arg)
@@ -153,22 +189,24 @@ class MayaWriter(object):
         """
         Use prettyprint to clean up display of returned objects. Especially handy for display of things like cmds.ls()
         """
-        if obj is not  None:
+        if obj is not None:
             disp = pprint.pformat(obj, indent=2)
             self.write(disp)
             self.write('\n')
 
 
-def set_terminal(writer = None, errorwriter =None):
+def set_terminal(writer=None, errorwriter=None):
     """
     Override sys.stdout with a MayaWriter (supplied or default) and an ErrorWriter(supplied or default)
     """
-    writer = writer or  MayaWriter()
+    writer = writer or MayaWriter()
     errorwriter = errorwriter or ErrorWriter()
 
     sys.stderr = errorwriter
     sys.stdout = writer
     sys.displayhook = writer.display_hook
+    sys.excepthook = errorwriter.excepthook
+
 
 def unset_terminal():
     """
@@ -177,6 +215,7 @@ def unset_terminal():
     sys.stdout = sys.__stdout__
     sys.stderr = sys.__stderr__
     sys.displayhook = sys.__displayhook__
+    sys.excepthook = sys.__excepthook__
 
 # automatically set the terminal to <maya> and turn on coloring on import
 # if you're not using this with Maya or ConEmu you'll want to edit these lines
