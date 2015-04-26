@@ -2,6 +2,8 @@ __author__ = 'Stephen Theodore'
 from collections import namedtuple
 import  pprint
 import sys
+import re
+
 
 # constants
 ESC = '\033'
@@ -81,7 +83,6 @@ class ConEmu(object):
         _pg = str(int(progress))
         sys.__stdout__.writelines(cls.CONEMU.format(4, _st + _pg))
 
-import re
 
 class ErrorWriter(object):
 
