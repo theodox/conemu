@@ -32,6 +32,8 @@ class Span(_span):
 class Terminal(object):
     '''
     A namespace containing generic terminal formatting
+    
+    There is no need to instantiate this: its just a collection of functions under a name.
     '''
     color = tuple((Span(multicode(38, 5, c), NOCOLOR)) for c in range(15))
     bg = tuple((Span(multicode(48, 5, c), NOBG)) for c in range(15))
@@ -56,6 +58,8 @@ class Terminal(object):
 class ConEmu(object):
     '''
     ConEmu-specific format commands
+    
+    There is no need to instantiate this: its just a collection of functions under a name.
     '''
     CONEMU = ESC + ']9;{};{}' + BELL
 
