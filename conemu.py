@@ -114,7 +114,7 @@ class ErrorWriter(object):
         self.bg = bg
 
     def write(self, arg):
-        sys.__stdout__.write("." + self.color(self.bg(arg)))
+        sys.__stdout__.write( self.color(self.bg(arg)))
 
     def writelines(self, *arg):
         sys.__stdout__.writelines(self.color(self.bg("\n".join(arg))))
