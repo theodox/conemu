@@ -4,6 +4,8 @@ import pprint
 import sys
 import re
 import traceback
+import logging
+
 
 # constants
 ESC = '\033'
@@ -114,10 +116,10 @@ class ErrorWriter(object):
         self.bg = bg
 
     def write(self, arg):
-        sys.__stdout__.write( self.color(self.bg(arg)))
+        sys.__stderr__.write(self.color(self.bg(arg)))
 
     def writelines(self, *arg):
-        sys.__stdout__.writelines(self.color(self.bg("\n".join(arg))))
+        sys.__stderr__.writelines(self.color(self.bg("\n".join(arg))))
 
     def excepthook(self, tb_type, exc_object, tb, detail=2):
         result = traceback.format_exception(tb_type, exc_object, tb, detail)
@@ -138,9 +140,9 @@ class MayaWriter(object):
 
     GENERIC = Terminal.color[15]  # for generic printouts
     COMMENT = Terminal.color[14]  # for code comments
-    CODE = Terminal.color[3]      # for code objects
-    MAYA = Terminal.color[11]     # for maya objects
-    BG = Terminal.bg[0]           # background (none by default)
+    CODE = Terminal.color[3]  # for code objects
+    MAYA = Terminal.color[11]  # for maya objects
+    BG = Terminal.bg[0]  # background (none by default)
 
 
     def __init__(self, color=GENERIC,
@@ -177,6 +179,7 @@ class MayaWriter(object):
 
 
     def write(self, arg):
+        if ":" in arg: arg = "# " + arg
         arg = re.sub(self.unicode, self.replace_unicode, arg)
         arg = re.sub(self.comment, self.replace_comment, arg)
         arg = re.sub(self.repr_code, self.replace_repr, arg)
@@ -217,8 +220,61 @@ def unset_terminal():
     sys.displayhook = sys.__displayhook__
     sys.excepthook = sys.__excepthook__
 
+
+class ColorLogFormatter(logging.Formatter):
+    DEBUG = Terminal.color[6]
+    INFO = Terminal.color[13]
+    WARN = Terminal.color[11]
+    ERROR = Terminal.color[8]
+    CRIT = Terminal.color[8]
+    ERROR_BG = Terminal.bg[1]
+
+
+    def __init__(self, fmt=None, datefmt=None, debug=DEBUG, info=INFO, warn=WARN, error=ERROR, crit=CRIT):
+        super(ColorLogFormatter, self).__init__(fmt, datefmt)
+        self._format = fmt
+        self.debug = debug
+        self.info = info
+        self.warn = warn
+        self.error = error
+        self.crit = crit
+        self._color_choice = {
+            logging.INFO: self.info,
+            logging.DEBUG: self.DEBUG,
+            logging.WARNING: self.warn,
+            logging.ERROR: self.error,
+            logging.CRITICAL: self.crit
+        }
+        self.error_bg = self.ERROR_BG
+
+    def format(self, record):
+        format_color = self._color_choice[record.levelno]
+        if record.levelno > logging.WARNING:
+            format_color = lambda p: self.error_bg(self._color_choice[record.levelno](p))
+
+        return format_color(super(ColorLogFormatter, self).format(record))
+
+
 # automatically set the terminal to <maya> and turn on coloring on import
 # if you're not using this with Maya or ConEmu you'll want to edit these lines
 set_terminal()
 ConEmu.set_tab('MAYA')
 Terminal.set_prompt("<maya> ")
+
+# create a color-aware logger named 'conemu'
+_color_handler = logging.StreamHandler(sys.stdout)
+_color_handler.setFormatter(ColorLogFormatter())
+logging.getLogger('conemu').addHandler(_color_handler)
+logging.getLogger('conemu').propagate = False
+
+
+def override_root_logger(fmt=None, datefmt=None):
+    """
+    Make the root logger color-aware. Note that this will remove any existing
+    handlers or formatters on the root logger - use with care
+    """
+    root = logging.getLogger()
+    root.handlers = []
+    root_color_handler = logging.StreamHandler(sys.stdout)
+    root_color_handler.setFormatter(ColorLogFormatter(fmt, datefmt))
+    root.addHandler(root_color_handler)
